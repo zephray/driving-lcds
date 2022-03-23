@@ -1,0 +1,13 @@
+
+.program el_udata
+.side_set 1
+.wrap_target
+    out pins, 4     side 1
+    nop             side 0
+.wrap
+
+.program el_ldata
+.wrap_target
+    out pins, 4
+    nop
+.wrap
