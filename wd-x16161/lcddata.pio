@@ -1,0 +1,25 @@
+
+; LCD SM handles D0-7, PCLK, HSYNC and VSYNC
+; PCLK is mapped to SIDE, HSYNC and VSYNC are mapped to SET, and D0-7 are mapped to OUT
+.program lcd_data
+.side_set 1
+    irq set 5 side 0
+    mov x, isr side 0 
+loop_first_line:
+    out pins, 8 side 1
+    jmp x-- loop_first_line side 0
+end_first_line:
+    set pins, 0b101 [5] side 0; Hsync high, Vsync high
+    set pins, 0b100     side 0; Hsync low, Vsync high
+    set pins, 0b000 [9] side 0; HVsync low
+line_start:
+    mov x, isr side 0
+loop:
+    out pins, 8 side 1 ; Output 8 bit data
+    jmp x-- loop side 0 ; Loop until x hits 0, then wait for next line
+loop_end:
+    set pins, 0b001 [5]  side 0; Hsync high, Vsync low
+    set pins, 0b000 [10] side 0; HVsync low
+    jmp y-- line_start side 0 
+    ; end of frame, signal CPU
+    irq wait 1 side 0
