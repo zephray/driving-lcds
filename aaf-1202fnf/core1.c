@@ -30,9 +30,13 @@
 //#define GREYSCALE_NONE // Clamp to BW mono
 //#define GREYSCALE_DITHER
 //#define GREYSCALE_PWM // 7-frame PWM
-#define GREYSCALE_1ST_SD // 1st-order sigma delta
+//#define GREYSCALE_1ST_SD // 1st-order sigma delta
 //#define GREYSCALE_2ND_SD // 2nd-order sigma delta
-//#define GREYSCALE_GLDP
+#define GREYSCALE_GLDP
+
+#if (defined(GREYSCALE_1ST_SD)) || (defined(GREYSCALE_2ND_SD))
+#define INJECT_NOISE
+#endif
 
 static unsigned char *framebuf;
 static unsigned char fb0[SCR_WIDTH * SCR_HEIGHT + 256];
@@ -51,6 +55,7 @@ static uint32_t framecnt = 0;
 #define GLDP_LENGTH (31)
 #define FRAMECNT_MAX (GLDP_LENGTH)
 #include "gldp.h"
+static int random_select = 1;
 #else
 #define FRAMECNT_MAX 1 // Doesn't matter
 #endif
@@ -87,7 +92,9 @@ static inline uint8_t handle_pixel(uint8_t color, int8_t *err1, int8_t *err2, in
     int err = *err1; // From last cycle
     // Each time, add the last raw minus last quantized
     int c = (int)color + err;
+#ifdef INJECT_NOISE
     c += ((dither & 0x1) << 1) - 1;
+#endif
     int output = (c > 15) ? 31 : 0;
     err = c - output;
     *err1 = err;
@@ -100,7 +107,9 @@ static inline uint8_t handle_pixel(uint8_t color, int8_t *err1, int8_t *err2, in
     int er2 = *err2; // From 2 cycles before
     // Each time, add the last raw minus last quantized
     int c = color + er1 * 2 - er2;
+#ifdef INJECT_NOISE
     c += ((dither & 0x1) << 1) - 1;
+#endif
     int output;
     // Force output to be 0/31 when input is 0/31
     if (color == 0) output = 0;
@@ -116,8 +125,9 @@ static inline uint8_t handle_pixel(uint8_t color, int8_t *err1, int8_t *err2, in
     
     return !!output;
 #elif (defined(GREYSCALE_GLDP))
-    int tableid = (x ^ y) & 1;
-    uint8_t output = gldp[(color * 2 + tableid) * GLDP_LENGTH + framecnt];
+    random_select = random_select / 2 ^ -(random_select % 2) & 0x428e;
+    int sel = (framecnt + random_select) % GLDP_LENGTH;
+    uint8_t output = gldp[color * GLDP_LENGTH + sel];
     return output;
 #endif
 }
@@ -151,6 +161,10 @@ void __no_inline_not_in_flash_func(core1_task)() {
 
 #ifdef GREYSCALE_DITHER
         memset(err1, 0, sizeof(err1));
+#endif
+
+#ifdef GREYSCALE_GLDP
+        random_select = 1;
 #endif
 
         for (int y = 0; y < SCR_HEIGHT; y++) {

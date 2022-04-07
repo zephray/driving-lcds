@@ -32,6 +32,7 @@
 #define SDVIDEO
 //#define GREYBAR
 //#define IMAGE
+//#define MOVING_BLOCK
 
 #ifdef IMAGE
 #include "image160160.h"
@@ -41,6 +42,12 @@
 // 480x160: 150 blocks, 320x100: 63 blocks
 #define BLOCK_PER_FRAME 63
 #define FRAMES  21313
+#endif
+
+#ifdef MOVING_BLOCK
+#define BG  10
+#define FG  20
+#define DIM 20
 #endif
 
 // Overclock
@@ -53,6 +60,14 @@ static void putpixel(uint8_t *buf, int x, int y, uint8_t c) {
 }
 
 static void fill(uint8_t *buf, int x0, int y0, int x1, int y1, uint8_t c) {
+    if (x0 < 0)
+        x0 = 0;
+    if (y0 < 0)
+        y0 = 0;
+    if (x1 >= SCR_WIDTH)
+        x1 = SCR_WIDTH - 1;
+    if (y1 >= SCR_HEIGHT)
+        y1 = SCR_HEIGHT - 1;
     for (int y = y0; y < y1; y++) {
         for (int x = x0; x < x1; x++) {
             putpixel(buf, x, y, c);
@@ -173,6 +188,18 @@ int main()
 
     fbuf = lcd_flip();
     while(1);
+#endif
+
+#ifdef MOVING_BLOCK
+    int x = -DIM;
+    while(1) {
+        unsigned char *fbuf = lcd_flip();
+        memset(fbuf, BG, SCR_WIDTH * SCR_HEIGHT);
+        fill(fbuf, x, (SCR_HEIGHT - DIM) / 2, x + DIM, (SCR_HEIGHT + DIM) / 2, FG);
+        x++;
+        if (x == SCR_WIDTH)
+            x = -DIM;
+    }
 #endif
 
     return 0;
