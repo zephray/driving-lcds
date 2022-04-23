@@ -42,6 +42,9 @@
 #define SCR_WIDTH (320)
 #define SCR_HEIGHT (100)
 
+/*#define SCR_WIDTH (256)
+#define SCR_HEIGHT (160)*/
+
 /*
 #define LCD_BUS_WIDTH (8)
 
@@ -54,7 +57,7 @@
 #define SCR_STRIDE_WORDS (SCR_WIDTH / 32)
 #define SCR_REFRESH_LINES (SCR_HEIGHT)
 
-#define LCD_TARGET_HZ (120)
+#define LCD_TARGET_HZ (240)
 #define LCD_TARGET_PIXCLK (LCD_TARGET_HZ * (SCR_LINE_TRANSFERS + 10) * SCR_REFRESH_LINES)
 
 // Public variables and functions
@@ -64,3 +67,4 @@ extern volatile bool frame_sync;
 
 void lcd_start();
 unsigned char *lcd_swap_buffer();
+void lcd_wait_vsync();

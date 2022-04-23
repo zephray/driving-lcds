@@ -18,6 +18,9 @@ include(pico_extras_import.cmake)
 
 project(lcddemo C CXX ASM)
 
+set(PICO_BOARD_HEADER_DIRS ${CMAKE_SOURCE_DIR}/board)
+set(PICO_BOARD "picooc")
+
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
@@ -59,3 +62,4 @@ target_link_libraries(lcddemo
 
 pico_add_extra_outputs(lcddemo)
 
+add_compile_options(-Ofast)

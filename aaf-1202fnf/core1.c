@@ -26,15 +26,28 @@
 #include "lcd.h"
 #include "font.h"
 
-// Choose from below
-//#define GREYSCALE_NONE // Clamp to BW mono
-//#define GREYSCALE_DITHER
-//#define GREYSCALE_PWM // 7-frame PWM
-//#define GREYSCALE_1ST_SD // 1st-order sigma delta
-//#define GREYSCALE_2ND_SD // 2nd-order sigma delta
-#define GREYSCALE_GLDP
+// Configuration of grayscale modulation
 
-#if (defined(GREYSCALE_1ST_SD)) || (defined(GREYSCALE_2ND_SD))
+// Select method
+//#define GRAYSCALE_NONE // Clamp to BW mono
+//#define GRAYSCALE_DITHER // Spatial dithering with error-diffusion
+//#define GRAYSCALE_PWM // PWM
+//#define GRAYSCALE_1ST_SD // 1st-order sigma delta
+#define GRAYSCALE_2ND_SD // 2nd-order sigma delta
+//#define GRAYSCALE_GLDP_LINEAR
+//#define GRAYSCALE_GLDP_NL
+
+#ifdef GRAYSCALE_PWM
+#define PWM_4G
+//#define PWM_8G
+//#define PWM_16G
+#endif
+
+#if (defined(GRAYSCALE_GLDP_LINEAR))
+#define RANDOM_SELECTION
+#endif
+
+#if (defined(GRAYSCALE_1ST_SD)) || (defined(GRAYSCALE_2ND_SD))
 #define INJECT_NOISE
 #endif
 
@@ -46,27 +59,42 @@ static signed char err2[SCR_WIDTH * SCR_HEIGHT]; // Z-2
 static int frontbuf;
 static int repeat;
 
-#define FRAME_REPEAT 4 // 0 - 120Hz, 1 - 60Hz, 2 - 40Hz, 3 - 30Hz, 4 - 24Hz
+// 120Hz
+//#define FRAME_REPEAT 4 // 0 - 120Hz, 1 - 60Hz, 2 - 40Hz, 3 - 30Hz, 4 - 24Hz
+// 240Hz
+#define FRAME_REPEAT 9 // 1 - 120Hz, 3 - 60Hz, 5 - 40Hz, 7 - 30Hz, 9 - 24Hz
 
+
+// Frame counter related
+#if (defined(GRAYSCALE_PWM))
 static uint32_t framecnt = 0;
-#if (defined(GREYSCALE_PWM))
+#ifdef PWM_4G
+#define FRAMECNT_MAX 3
+#elif defined(PWM_8G)
 #define FRAMECNT_MAX 7 // 0-6
-#elif (defined(GREYSCALE_GLDP))
+#elif defined(PWM_16G)
+#define FRAMECNT_MAX 15
+#endif
+#elif (defined(GRAYSCALE_GLDP_LINEAR))
+static uint32_t framecnt = 0;
 #define GLDP_LENGTH (31)
 #define FRAMECNT_MAX (GLDP_LENGTH)
-#include "gldp.h"
+#include "gldp_32_linear.h"
 static int random_select = 1;
+#elif (defined(GRAYSCALE_GLDP_NL))
+static uint32_t framecnt[32] = {0};
+#include "gldp_32_nonlinear.h"
 #else
-#define FRAMECNT_MAX 1 // Doesn't matter
+// None
 #endif
 
 static inline uint8_t handle_pixel(uint8_t color, int8_t *err1, int8_t *err2, int x, int y) {
-#ifdef GREYSCALE_NONE
-    return (color > 15);
-#elif (defined(GREYSCALE_DITHER))
+#ifdef GRAYSCALE_NONE
+    return (color > 31);
+#elif (defined(GRAYSCALE_DITHER))
     int err = *err1;
     int c = color + err;
-    int output = (err > 15) ? 31 : 0;
+    int output = (err > 31) ? 63 : 0;
     err = c - output;
     // Floyd-Steinberg
     // . * 1
@@ -84,23 +112,45 @@ static inline uint8_t handle_pixel(uint8_t color, int8_t *err1, int8_t *err2, in
     }
 
     return !!output;
-#elif (defined(GREYSCALE_PWM))
-    return ((color/4) > framecnt);
-#elif (defined(GREYSCALE_1ST_SD))
-    static int dither = 1;
-    dither = dither / 2 ^ -(dither % 2) & 0x428e;
+#elif (defined(GRAYSCALE_PWM))
+#ifdef PWM_4G
+    color = color / 16; 
+#elif defined(PWM_8G)
+    color = color / 8;
+#elif defined(PWM_16G)
+    color = color / 4;
+#endif
+    return (color > framecnt);
+#elif (defined(GRAYSCALE_1ST_SD))
+    //color = color >> 1;
+
+#if 1
+    // LFSR
+    static int dither = 0x1234;
+    //dither = dither / 2 ^ -(dither % 2) & 0x428e; // 15-bit LFSR
+    dither = dither / 2 ^ -(dither % 2) & 0x2000250; // 26-bit LFSR
+#else
+    // PCG
+    static uint64_t state;
+    uint64_t oldstate = state;
+    state = oldstate * 6364136223846793005ULL + 1ULL;
+    uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
+    uint32_t rot = oldstate >> 59u;
+    uint32_t dither = (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+#endif
+
     int err = *err1; // From last cycle
     // Each time, add the last raw minus last quantized
     int c = (int)color + err;
 #ifdef INJECT_NOISE
     c += ((dither & 0x1) << 1) - 1;
 #endif
-    int output = (c > 15) ? 31 : 0;
+    int output = (c > 31) ? 63 : 0;
     err = c - output;
     *err1 = err;
 
     return !!output;
-#elif (defined(GREYSCALE_2ND_SD))
+#elif (defined(GRAYSCALE_2ND_SD))
     static int dither = 1;
     dither = dither / 2 ^ -(dither % 2) & 0x428e;
     int er1 = *err1; // From last cycle
@@ -112,9 +162,13 @@ static inline uint8_t handle_pixel(uint8_t color, int8_t *err1, int8_t *err2, in
 #endif
     int output;
     // Force output to be 0/31 when input is 0/31
+#if 0
     if (color == 0) output = 0;
-    else if (color == 31) output = 31;
-    else output = (c > 15) ? 31 : 0;
+    else if (color == 63) output = 63;
+    else output = (c > 31) ? 63 : 0;
+#else
+    output = (c > 31) ? 63 : 0;
+#endif
     er2 = er1;
     er1 = c - output;
     // Clamp to avoid overflow
@@ -124,10 +178,19 @@ static inline uint8_t handle_pixel(uint8_t color, int8_t *err1, int8_t *err2, in
     *err2 = er2;
     
     return !!output;
-#elif (defined(GREYSCALE_GLDP))
+#elif (defined(GRAYSCALE_GLDP_LINEAR))
+#ifdef RANDOM_SELECTION
     random_select = random_select / 2 ^ -(random_select % 2) & 0x428e;
     int sel = (framecnt + random_select) % GLDP_LENGTH;
-    uint8_t output = gldp[color * GLDP_LENGTH + sel];
+#else
+    int sel = framecnt;
+#endif
+    uint8_t output = gldp[(color / 2) * GLDP_LENGTH + sel];
+    return output;
+#elif (defined(GRAYSCALE_GLDP_NL))
+    //int gldp_length = gldp[(color / 2)][0];
+    int sel = framecnt[(color / 2)];
+    uint8_t output = gldp[(color / 2)][1 + sel];
     return output;
 #endif
 }
@@ -151,7 +214,8 @@ void __no_inline_not_in_flash_func(core1_task)() {
         }
         else {
             repeat++;
-#ifdef GREYSCALE_DITHER
+#ifdef GRAYSCALE_DITHER
+            lcd_wait_vsync();
             continue;
 #endif
         }
@@ -159,11 +223,11 @@ void __no_inline_not_in_flash_func(core1_task)() {
         /* Submit finished buffer and wait for Vsync */
         unsigned char *bp = lcd_swap_buffer();
 
-#ifdef GREYSCALE_DITHER
+#ifdef GRAYSCALE_DITHER
         memset(err1, 0, sizeof(err1));
 #endif
 
-#ifdef GREYSCALE_GLDP
+#ifdef GRAYSCALE_GLDP_LINEAR
         random_select = 1;
 #endif
 
@@ -172,7 +236,7 @@ void __no_inline_not_in_flash_func(core1_task)() {
                 unsigned char byte = 0;
                 unsigned char *fb = &framebuf[y * SCR_WIDTH + x * 8];
                 signed char *er1 = &err1[y * SCR_WIDTH + x * 8];
-                #if (defined(GREYSCALE_2ND_SD))
+                #if (defined(GRAYSCALE_2ND_SD))
                 signed char *er2 = &err2[y * SCR_WIDTH + x * 8];
                 #else
                 signed char *er2 = NULL;
@@ -202,10 +266,18 @@ void __no_inline_not_in_flash_func(core1_task)() {
         }
 
         // For PWM/ GLDP
+        #if (defined(FRAMECNT_MAX))
         framecnt++;
 
         if (framecnt == FRAMECNT_MAX)
             framecnt = 0;
+        #elif (defined(GRAYSCALE_GLDP_NL))
+        for (int i = 0; i < 32; i++) {
+            framecnt[i]++;
+            if (framecnt[i] == gldp[i][0])
+                framecnt[i] = 0;
+        }
+        #endif
     }
 } 
 

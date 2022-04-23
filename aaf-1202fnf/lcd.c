@@ -41,6 +41,7 @@ static int frame_state = 0;
 static bool ac = 0;
 volatile int frame_scroll_lines = 0;
 volatile bool swap_buffer = false;
+volatile bool vsync = false;
 
 static void lcd_sm_load_reg(uint sm, enum pio_src_dest dst, uint32_t val) {
     pio_sm_put_blocking(lcd_pio, sm, val);
@@ -63,6 +64,7 @@ static void lcd_dma_init_channel(uint chan, uint dreq, volatile uint32_t *dst) {
 }
 
 static void lcd_pio_irq_handler() {
+    vsync = true;
     if (swap_buffer) {
         frame_state = !frame_state;
         swap_buffer = false;
@@ -181,3 +183,9 @@ unsigned char *lcd_swap_buffer() {
 /*void lcd_debug() {
     printf("PIO USM PC: %d, LSM PC: %d, IRQ: %d\n", lcd_pio->sm[LCD_DATA_SM].addr, lcd_pio->sm[lcd_LDATA_SM].addr, lcd_pio->irq);
 }*/
+
+// Wait for vsync but not update buffer ,for timing purposes
+void lcd_wait_vsync() {
+    vsync = false;
+    while (!vsync);
+}

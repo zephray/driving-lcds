@@ -28,14 +28,20 @@
 #include "hardware/vreg.h"
 #include "lcd.h" // For resolution definition, should not call any functions
 #include "core1.h"
+#include "font.h"
+
+#define USE_LUT
 
 #define SDVIDEO
-//#define GREYBAR
+//#define GRAYBAR
+//#define GRAYSEQ
 //#define IMAGE
 //#define MOVING_BLOCK
 
 #ifdef IMAGE
-#include "image160160.h"
+#include "image.h"
+//#include "image160160.h"
+//#include "image240160.h"
 #endif
 
 #ifdef SDVIDEO
@@ -50,10 +56,14 @@
 #define DIM 20
 #endif
 
+#ifdef USE_LUT
+#include "lut.h"
+#endif
+
 // Overclock
-#define VREG_VSEL   VREG_VOLTAGE_1_20
+#define VREG_VSEL   VREG_VOLTAGE_1_30
 //#define SYSCLK_KHZ  250000
-#define SYSCLK_KHZ  300000
+#define SYSCLK_KHZ  424000
 
 static void putpixel(uint8_t *buf, int x, int y, uint8_t c) {
     buf[SCR_WIDTH * y + x] = c;
@@ -75,7 +85,7 @@ static void fill(uint8_t *buf, int x0, int y0, int x1, int y1, uint8_t c) {
     }
 }
 
-/*void put_char(unsigned char *buf, int x, int y, char c, int fg, int bg) {
+void put_char(unsigned char *buf, int x, int y, char c, int fg, int bg) {
     int i, j, p;
 	for(i = 0; i < 6; i++)
 	{
@@ -101,7 +111,7 @@ void put_string(unsigned char *buf, int x, int y, char *str, int fg, int bg) {
             put_char(buf, x, y, c, fg, bg);
         x += 6;
     }
-}*/
+}
 
 static unsigned char *lcd_flip() {
     multicore_fifo_push_blocking(0x1234); // Push something to request flip
@@ -160,7 +170,11 @@ int main()
         sd_read_blocks(fbuf, block_addr, BLOCK_PER_FRAME);
         block_addr += BLOCK_PER_FRAME;
         for (int i = 0; i < BLOCK_PER_FRAME*512; i++) {
-            fbuf[i] = 31 - (fbuf[i] >> 3);
+            #ifdef USE_LUT
+            fbuf[i] = 63 - color_lut[fbuf[i]];
+            #else
+            fbuf[i] = 63 - (fbuf[i] >> 2);
+            #endif
         }
     }
     fbuf = lcd_flip();
@@ -168,23 +182,63 @@ int main()
     while (1);
 #endif
 
-#ifdef GREYBAR
+#ifdef GRAYBAR
     unsigned char *fbuf = lcd_flip();
 
-    for (int i = 0; i < 32; i++) {
-        fill(fbuf, i * 10, 0, (i + 1) * 10, 80, i);
+#ifdef USE_LUT
+    for (int i = 0; i < 256; i++) {
+        fill(fbuf, i, 0, (i + 1), 80, color_lut[i]);
     }
+#else
+    for (int i = 0; i < 64; i++) {
+        fill(fbuf, i * 4, 0, (i + 1) * 4, 80, i);
+    }
+#endif
+    
+    put_string(fbuf, 0, 80, "Hello, world!\n", 63, 0);
 
     fbuf = lcd_flip();
     while(1);
+#endif
+
+#ifdef GRAYSEQ
+    uint8_t level = 0;
+
+    while(1) {
+        char strb[10];
+        sprintf(strb, "%d", level);
+        unsigned char *fbuf = lcd_flip();
+        memset(fbuf, level, SCR_HEIGHT * SCR_WIDTH);
+        put_string(fbuf, 0, 0, strb, 63, 0);
+        level++;
+        if (level == 64)
+            level = 0;
+
+        sleep_ms(1000);
+    }
+    
 #endif
 
 #ifdef IMAGE
     unsigned char *fbuf = lcd_flip();
     
     for (int i = 0; i < SCR_WIDTH * SCR_HEIGHT; i++) {
-        fbuf[i] = gImage_image160160[i] >> 3;
+    #ifdef USE_LUT
+        fbuf[i] = color_lut[gImage_image320100[i]];
+    #else
+        fbuf[i] = gImage_image320100[i] >> 2;
+    #endif
     }
+
+    /*for (int i = 0; i < SCR_WIDTH * SCR_HEIGHT; i++) {
+        fbuf[i] = gImage_image160160[i] >> 3;
+    }*/
+
+    /*for (int y = 0; y < 160; y++) {
+        for (int x = 0; x < 240; x++) {
+            fbuf[y * SCR_WIDTH + x] = gImage_gba[(159 - y) * 240 + (239 - x)] >> 3;
+        }
+    }*/
 
     fbuf = lcd_flip();
     while(1);
