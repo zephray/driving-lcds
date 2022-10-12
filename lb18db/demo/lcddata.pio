@@ -1,0 +1,40 @@
+
+.program lcd_data
+line_loop:
+    ; Send hsync pulse (32+32+2=66 cycles)
+    set pins, 0b10 [31] ; Vsync inactive, Hsync active
+    nop [31]
+    set pins, 0b11 [1] ; Vsync inactive, Hsync inactive
+    ; Output line data
+    mov x, isr [1]
+data_loop:
+    out pins, 8 [2]
+    jmp x-- data_loop
+    ; end of line
+    nop [2]
+    jmp y-- line_loop
+    ; End of data frame, send Vsync
+    
+    set y, 20 [1]
+
+dummy_line_loop:
+    set pins, 0b00 [31] ; Vsync active, Hsync active
+    nop [31]
+    set pins, 0b01 [1] ; Vsync active, Hsync inactive
+    ; Output dummy line
+    mov x, isr
+    nop
+dummy_data_loop:
+    nop [2]
+    jmp x-- dummy_data_loop
+    nop
+    jmp y-- dummy_line_loop
+    ; end of frame, signal CPU
+    irq wait 1 side 0
+
+
+.program lcd_clk
+.wrap_target
+    set pins, 1
+    set pins, 0
+.wrap
