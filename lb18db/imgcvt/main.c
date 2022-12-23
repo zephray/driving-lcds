@@ -79,6 +79,8 @@ int main(int argc, char *argv[]) {
     printf("Filtering image: ");
     PROFILE(disp_filtering_image(target, zero_rect, zero_rect));
 
+    //disp_filtering_image_b(image);
+
     printf("Present image: ");
     PROFILE(disp_present(zero_rect, WVMD_GC16, true, true));
 

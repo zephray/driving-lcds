@@ -314,6 +314,10 @@ uint8_t add_saturate(uint8_t a, int8_t b) {
     return val;
 }
 
+// R G B R G B
+//  B R G B R
+// R G B R G B
+
 // Process image to be displayed on EPD
 void disp_filtering_image(Canvas *src, Rect src_rect, Rect dst_rect) {
     uint8_t *src_raw = (uint8_t *)src->buf;
@@ -353,16 +357,20 @@ void disp_filtering_image(Canvas *src, Rect src_rect, Rect dst_rect) {
 
     #ifdef ENABLE_LPF
             // Low pass filtering to reduce the color/ jagged egdes
-            uint32_t pix_u = (y == 0) ? pix : SRC_PIX(x, y - 1, comp);
-            uint32_t pix_d = (y == (h - 1)) ? pix : SRC_PIX(x, y + 1, comp);
+            uint32_t pix_ul = (y == 0) ? pix : SRC_PIX(x, y - 1, comp);
+            uint32_t pix_ur = (y == 0) ? pix : ((x == (w - 1)) ? pix : SRC_PIX(x + 1, y - 1, comp));
+            uint32_t pix_dl = (y == (h - 1)) ? pix : SRC_PIX(x, y + 1, comp);
+            uint32_t pix_dr = (y == (h - 1)) ? pix : ((x == (w - 1)) ? pix : SRC_PIX(x + 1, y + 1, comp));
             uint32_t pix_l = (x == 0) ? pix : SRC_PIX(x - 1, y, comp);
             uint32_t pix_r = (x == (w - 1)) ? pix : SRC_PIX(x + 1, y, comp);
-            pix = pix >> 1; // /2
-            pix_u = pix_u >> 3; // /8
-            pix_d = pix_d >> 3;
-            pix_l = pix_l >> 3;
-            pix_r = pix_r >> 3;
-            pix = pix + pix_u + pix_d + pix_l + pix_r;
+            pix = pix * 10; // 10/16
+            pix_ul = pix_ul; // 1/16
+            pix_ur = pix_ur; // 1/16
+            pix_dl = pix_dl;
+            pix_dr = pix_dr;
+            pix_l = pix_l;
+            pix_r = pix_r;
+            pix = (pix + pix_ul + pix_ur + pix_dl + pix_dr + pix_l + pix_r) / 16;
     #endif
 
             printf(" 0x%02x,", pix);
@@ -385,6 +393,64 @@ void disp_filtering_image(Canvas *src, Rect src_rect, Rect dst_rect) {
     }
 
     printf("\n};\n");
+
+    uint32_t *texture_pixels;
+    int texture_pitch;
+    SDL_LockTexture(texture, NULL, (void **)&texture_pixels, &texture_pitch);
+    assert(texture_pitch == (screen->width * 4));
+    memcpy(texture_pixels, screen->buf, screen->height * texture_pitch);
+    SDL_UnlockTexture(texture);
+
+}
+
+void dst_pix_l(uint32_t *buf, int w, int x, int y, uint32_t p) {
+    buf[y * w + x] = p;
+    buf[y * w + x + 1] = p;
+    buf[(y + 1) * w + x] = p;
+    buf[(y + 1) * w + x + 1] = p;
+}
+
+void disp_filtering_image_b(Canvas *src) {
+    uint8_t *src_raw = (uint8_t *)src->buf;
+    uint32_t *dst_raw = (uint32_t *)screen->buf;
+    uint32_t dst_w = screen->width;
+    uint32_t src_x = 0;
+    uint32_t src_y = 0;
+    uint32_t w = src->width;
+    uint32_t h = src->height;
+    uint32_t dst_x = 0;
+    uint32_t dst_y = 0;
+
+    assert(src->pixelFormat == PIXFMT_RGB888);
+#define SRC_PIX(x, y, comp) src_raw[((src_y + y) * w + src_x + x) * 3 + comp]
+    int output_counter = 0;
+
+    // Convert to 8bpp in target buffer
+    for (int y = 0; y < h; y++) {
+        for (int x = 0; x < w; x++) {
+            uint32_t r, g, b;
+            r = SRC_PIX(x, y, 0);
+            g = SRC_PIX(x, y, 1);
+            b = SRC_PIX(x, y, 2);
+
+            r = (r << 16) | 0xff000000;
+            g = (g << 8) | 0xff000000;
+            b = (b << 0) | 0xff000000;
+
+            int xx = x * 3;
+            int yy = y * 4;
+            if (x % 2 == 0) {
+                dst_pix_l(dst_raw, dst_w, xx + 1, yy, r);
+                dst_pix_l(dst_raw, dst_w, xx, yy + 2, g);
+                dst_pix_l(dst_raw, dst_w, xx + 2, yy + 2, b);
+            }
+            else {
+                dst_pix_l(dst_raw, dst_w, xx + 1, yy + 2, r);
+                dst_pix_l(dst_raw, dst_w, xx, yy, g);
+                dst_pix_l(dst_raw, dst_w, xx + 2, yy, b);
+            }
+        }
+    }
 
     uint32_t *texture_pixels;
     int texture_pitch;
