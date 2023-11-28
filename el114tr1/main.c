@@ -24,6 +24,8 @@ const char text[] =
 uint8_t framebuffer[EPD_FB_SIZE];
 
 extern const char image[];
+extern const char image_black[];
+extern const char image_red[];
 
 #define BS_PIN          0
 #define DC_PIN          1
@@ -206,24 +208,69 @@ const unsigned char lut_bb1[] ={
     0x00,0x00,0x00,0x00,0x00,0x00
 };
 
+const unsigned char *lut_bw[] = {lut_vcom1, lut_ww1, lut_bw1, lut_wb1, lut_bb1};
+const int lut_bw_length[] = {sizeof(lut_vcom1), sizeof(lut_ww1), sizeof(lut_bw1), sizeof(lut_wb1), sizeof(lut_bb1)};
 
-void lut1(void)
+// LUT for BWR
+const unsigned char lut_vcom2[] ={
+    0x00, 0x0f, 0x08, 0x1f, 0x3e, 0x01,
+    0x00, 0x48, 0x16, 0x00, 0x00, 0x0c,
+    0x00, 0x0a, 0x0a, 0x00, 0x00, 0x19,
+    0x00, 0x02, 0x03, 0x00, 0x00, 0x19,
+    0x00, 0x02, 0x03, 0x00, 0x00, 0x06,
+    0x00, 0x2b, 0x00, 0x00, 0x00, 0x09,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+};
+
+const unsigned char lut_red2[] ={
+    0xaa, 0x0f, 0x08, 0x1f, 0x3e, 0x01,
+    0x90, 0x48, 0x16, 0x00, 0x00, 0x0c,
+    0x90, 0x0a, 0x0a, 0x00, 0x00, 0x19,
+    0x90, 0x02, 0x03, 0x00, 0x00, 0x19,
+    0x00, 0x02, 0x03, 0x00, 0x00, 0x06,
+    0xb0, 0x03, 0x28, 0x00, 0x00, 0x09,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+};
+
+/*
+	0xaa, 0x0f, 0x08, 0x1f, 0x3e, 0x01,
+	0x90, 0x48, 0x16, 0x00, 0x00, 0x0c,
+	0x90, 0x0a, 0x0a, 0x00,	0x00, 0x19,
+	0x90, 0x02, 0x03, 0x00, 0x00, 0x19,
+	0x00, 0x02, 0x03, 0x00, 0x00, 0x06,
+	0xb0, 0x03, 0x28, 0x00, 0x00, 0x09,
+	0xc0, 0x8e, 0x00, 0x00, 0x00, 0x05,*/
+
+const unsigned char lut_white2[] ={
+    0x01, 0x0f, 0x08, 0x1f, 0x3e, 0x01,
+    0x90, 0x48, 0x16, 0x00, 0x00, 0x0c,
+    0x90, 0x0a, 0x0a, 0x00, 0x00, 0x19,
+    0x80, 0x02, 0x03, 0x00, 0x00, 0x19,
+    0x80, 0x02, 0x03, 0x00, 0x00, 0x06,
+    0x08, 0x28, 0x00, 0x03, 0x00, 0x09,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+};
+
+const unsigned char lut_black2[] ={
+    0x0a, 0x0f, 0x08, 0x1f, 0x3e, 0x01,
+    0x90, 0x48, 0x16, 0x00, 0x00, 0x0c,
+    0x90, 0x0a, 0x0a, 0x00, 0x00, 0x19,
+    0x10, 0x02, 0x03, 0x00, 0x00, 0x19,
+    0x10, 0x02, 0x03, 0x00, 0x00, 0x06,
+    0x00, 0x2b, 0x00, 0x00, 0x00, 0x09,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+};
+
+const unsigned char *lut_bwr[] = {lut_vcom2, lut_black2, lut_red2, lut_white2, lut_black2}; // 11 10 01 00
+const int lut_bwr_length[] = {sizeof(lut_vcom2), sizeof(lut_black2), sizeof(lut_red2), sizeof(lut_white2), sizeof(lut_black2)};
+
+void epd_load_lut(const unsigned char **lut, const int *lut_length)
 {
-    unsigned int count;
-    epd_send_cmd(ID_ALL, 0x20);
-    for(count=0;count<44;count++) epd_send_dat(ID_ALL, lut_vcom1[count]);
-
-    epd_send_cmd(ID_ALL, 0x21);
-    for(count=0;count<42;count++) epd_send_dat(ID_ALL, lut_ww1[count]);  
-
-    epd_send_cmd(ID_ALL, 0x22);
-    for(count=0;count<42;count++) epd_send_dat(ID_ALL, lut_bw1[count]);
-
-    epd_send_cmd(ID_ALL, 0x23);
-    for(count=0;count<42;count++) epd_send_dat(ID_ALL, lut_wb1[count]);
-
-    epd_send_cmd(ID_ALL, 0x24);
-    for(count=0;count<42;count++) epd_send_dat(ID_ALL, lut_bb1[count]);
+    for (int i = 0; i < 5; i++) {
+        epd_send_cmd(ID_ALL, 0x20 + i);
+        for (int j = 0; j < lut_length[i]; j++)
+            epd_send_dat(ID_ALL, lut[i][j]);
+    }
 }
 
 void epd_init() {
@@ -259,7 +306,7 @@ void epd_init() {
     //sleep_ms(100);
 
     epd_send_cmd(ID_ALL, 0x00); // panel setting
-    epd_send_dat(ID_ALL, 0xbf);
+    epd_send_dat(ID_ALL, 0x2f);
     //epd_send_dat(ID_ALL, 0x1f);
     epd_send_dat(ID_ALL, 0x0d);
 
@@ -272,15 +319,16 @@ void epd_init() {
     epd_send_cmd(ID_ALL, 0x61); // resolution setting
     epd_send_dat(ID_ALL, 400 / 256);
     epd_send_dat(ID_ALL, 400 % 256);
-    epd_send_dat(ID_ALL, 300 / 256);
-    epd_send_dat(ID_ALL, 300 % 256);
+    epd_send_dat(ID_ALL, 240 / 256);
+    epd_send_dat(ID_ALL, 240 % 256);
 
     epd_send_cmd(ID_ALL, 0xe0); // cascade settings
     epd_send_dat(ID_ALL, 0x03);
     epd_send_cmd(ID_ALL, 0xe5);
     epd_send_dat(ID_ALL, 0x10);
 
-    lut1();
+    epd_load_lut(lut_bw, lut_bw_length);
+    //epd_load_lut(lut_bwr, lut_bwr_length);
 
     epd_send_cmd(ID_MASTER, 0x04);
     epd_wait_busy(ID_ALL);
@@ -313,7 +361,30 @@ void epd_clean(uint8_t old, uint8_t new) {
     epd_send_buffer(ID_ALL, framebuffer, 15000);
 }
 
+void epd_test(int id, uint8_t b0, uint8_t b1) {
+    memset(framebuffer, b0, EPD_FB_SIZE);
+    epd_send_cmd(id, 0x10);
+    epd_send_buffer(id, framebuffer, 15000);
+    memset(framebuffer, b1, EPD_FB_SIZE);
+    epd_send_cmd(id, 0x13);
+    epd_send_buffer(id, framebuffer, 15000);
+}
+
+void epd_send_single_image(uint8_t cmd, uint8_t *buf) {
+    for (int i = 0; i < 4; i++) {
+        epd_send_cmd(i, cmd);
+        uint32_t ram_offset = (i == 0 ? 1 : (i == 1) ? 0 : i) * 400 / 8;
+        uint8_t *p = buf + ram_offset;
+        for (int j = 0; j < 240; j++) {
+            epd_send_buffer(i, p, 400 / 8);
+            p += EPD_WIDTH / 8;
+        }
+    }
+}
+
 void epd_update() {
+#if 1
+    // BW
     static uint8_t empty[1000];
     memset(empty, 0xff, 1000);
     epd_send_cmd(ID_ALL, 0x10);
@@ -321,16 +392,17 @@ void epd_update() {
         epd_send_buffer(ID_ALL, empty, 1000);
     }
 
-    for (int i = 0; i < 4; i++) {
-        epd_send_cmd(i, 0x13);
-        uint32_t ram_offset = (i == 0 ? 1 : (i == 1) ? 0 : i) * 400 / 8;
-        uint8_t *p = image + ram_offset;
-        for (int j = 0; j < 240; j++) {
-            epd_send_buffer(i, p, 400 / 8);
-            p += EPD_WIDTH / 8;
-        }
-        
-    }
+    epd_send_single_image(0x13, image);
+#else
+    // BWR
+    epd_send_single_image(0x10, image_black);
+    epd_send_single_image(0x13, image_red);
+
+    // epd_test(ID_SLAVE1, 0x00, 0x00);
+    // epd_test(ID_MASTER, 0x00, 0xff);
+    // epd_test(ID_SLAVE2, 0xff, 0x00);
+    // epd_test(ID_SLAVE3, 0xff, 0xff);
+#endif
 }
 
 static void epd_set_pixel(int x, int y, uint8_t c) {
@@ -381,18 +453,20 @@ int main() {
     epd_init();
     gpio_put(25, 0);
 
+#if 1
+    // BW only
     epd_clean(0xff, 0x00);
     gpio_put(25, 1);
 
     epd_refresh();
     gpio_put(25, 0);
 
-
     epd_clean(0x00, 0xff);
     gpio_put(25, 1);
 
     epd_refresh();
     gpio_put(25, 0);
+#endif
 
     //epd_disp_string(0, 0, text, 0, 1);
     epd_update();
