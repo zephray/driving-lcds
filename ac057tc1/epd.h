@@ -1,5 +1,5 @@
 //
-// Copyright 2021 Wenting Zhang <zephray@outlook.com>
+// Copyright 2024 Wenting Zhang <zephray@outlook.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,8 +31,14 @@
 
 #define EPD_WIDTH   600
 #define EPD_HEIGHT  448
+#define EPD_BUFLEN  (EPD_WIDTH * EPD_HEIGHT / 2)
 
 void epd_init(void);
 void epd_clear(uint8_t color);
-void epd_image(uint8_t *image);
+void epd_disp_palette_3bpp(void);
+void epd_disp_palette_6bpp(void);
+void epd_disp_palette_9bpp(void);
+void epd_disp_image_3bpp(uint8_t *image);
+void epd_disp_image_6bpp(uint8_t *image);
+void epd_disp_image_9bpp(uint8_t *image);
 void epd_sleep(void);

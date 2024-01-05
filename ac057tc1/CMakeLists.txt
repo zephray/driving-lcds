@@ -22,13 +22,16 @@ pico_sdk_init()
 add_executable(fw
         fw.c
         epd.c
-        image.c
+        image_3bpp.c
+        image_6bpp.c
+        image_9bpp.c
+        lut.c
         )
 
 pico_set_program_name(fw "fw")
 pico_set_program_version(fw "0.1")
 
-pico_enable_stdio_uart(fw 0)
+pico_enable_stdio_uart(fw 1)
 pico_enable_stdio_usb(fw 0)
 
 # Add the standard library to the build

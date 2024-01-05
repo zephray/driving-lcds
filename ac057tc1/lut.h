@@ -1,5 +1,5 @@
 //
-// Copyright 2021 Wenting Zhang <zephray@outlook.com>
+// Copyright 2024 Wenting Zhang <zephray@outlook.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -19,32 +19,21 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-#include <stdio.h>
-#include "pico/stdlib.h"
-#include "epd.h"
+#pragma once
 
-extern const char test_image_3bpp[];
-extern const char test_image_6bpp[];
-extern const char test_image_9bpp[];
+#include <stdint.h>
 
-int main()
-{
-    stdio_init_all();
+#define VCOM_LUT_SIZE   220
+#define COLOR_LUT_SIZE  260
+#define XON_LUT_SIZE    200
 
-    printf("START\n");
+#define VCOM_LUT_REG    0x20
+#define XON_LUT_REG     0x29
 
-    epd_init();
-    //epd_disp_palette_3bpp();
-    //epd_disp_palette_6bpp();
-    epd_disp_palette_9bpp();
-    //epd_disp_image_3bpp(test_image_3bpp);
-    //epd_disp_image_6bpp(test_image_6bpp);
-    //epd_disp_image_9bpp(test_image_9bpp);
-    epd_sleep();
+typedef struct {
+    const uint8_t *lut;
+    uint32_t size;
+} lut_t;
 
-    while (1) {
-        //
-    }
-
-    return 0;
-}
+extern const lut_t lut0[10];
+extern const lut_t lut1[10];
